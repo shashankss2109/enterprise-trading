@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Enterprise Trading Terminal</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            background: linear-gradient(120deg, #e3f2fd, #f8f9fa);
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .navbar {
+            background: linear-gradient(90deg, #007bff, #00c6ff);
+        }
+
+        .card {
+            border-radius: 18px;
+            border: none;
+            transition: 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-3px);
+        }
+
+        .shadow {
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08) !important;
+        }
+
+        .summary-card {
+            background: linear-gradient(135deg, #ffffff, #f1f9ff);
+        }
+
+        .market-card {
+            background: linear-gradient(135deg, #f8fff4, #eafff1);
+        }
+
+        .trade-card {
+            background: linear-gradient(135deg, #fff8f2, #fff1e6);
+        }
+
+        .profit {
+            color: #198754;
+            font-weight: bold;
+        }
+
+        .loss {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .btn-primary {
+            background: linear-gradient(90deg, #007bff, #00c6ff);
+            border: none;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+
+<body>
+
+<nav class="navbar navbar-dark p-3">
+    <div class="container-fluid">
+        <span class="navbar-brand fs-4 fw-bold">📊 Enterprise Trading</span>
+        <form th:action="@{/logout}" method="post">
+            <button class="btn btn-light btn-sm">Logout</button>
+        </form>
+    </div>
+</nav>
+
+<div class="container mt-4">
+
+<div th:if="${success}" class="alert alert-success text-center"
+     th:text="${success}"></div>
+
+<!-- ACCOUNT SUMMARY -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card p-4 shadow summary-card">
+            <h6 class="text-muted">Balance</h6>
+            <h2 class="fw-bold text-primary">$<span th:text="${balance}"></span></h2>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card p-4 shadow summary-card">
+            <h6 class="text-muted">Total Portfolio Value</h6>
+            <h2 class="fw-bold text-success">$<span th:text="${totalValue}"></span></h2>
+        </div>
+    </div>
+</div>
+
+<!-- LIVE MARKET -->
+<div class="card p-4 mb-4 shadow market-card">
+    <h4 class="fw-bold text-success">Live Market</h4>
+    <div class="row mt-3">
+        <div class="col-md-3 mb-3" th:each="entry : ${prices}">
+            <div class="card text-center p-3 shadow-sm bg-white">
+                <h6 th:text="${entry.key}"></h6>
+                <h5 class="text-primary">$<span th:text="${entry.value}"></span></h5>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- EXECUTE TRADE -->
+<div class="card p-4 mb-4 shadow trade-card">
+    <h4 class="fw-bold text-warning">Execute Trade</h4>
+    <form th:action="@{/trade}" method="post" class="row g-3 mt-2">
+        <div class="col-md-3">
+            <input name="symbol" class="form-control" placeholder="Symbol (AAPL)" required>
+        </div>
+        <div class="col-md-3">
+            <input type="number" name="qty" class="form-control" placeholder="Quantity" required>
+        </div>
+        <div class="col-md-3">
+            <select name="type" class="form-select">
+                <option value="BUY">BUY</option>
+                <option value="SELL">SELL</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <button class="btn btn-primary w-100 fw-bold">Execute</button>
+        </div>
+    </form>
+</div>
+
+<!-- PORTFOLIO CHART -->
+<div class="card p-4 mb-4 shadow bg-white">
+    <h4 class="fw-bold text-info">Portfolio Allocation</h4>
+    <div style="height:350px;">
+        <canvas id="portfolioChart"></canvas>
+    </div>
+</div>
+
+<!-- HIDDEN DATA FOR CHART -->
+<div id="portfolioData" style="display:none;">
+    <div th:each="p : ${positions}"
+         th:data-symbol="${p.symbol}"
+         th:data-qty="${p.quantity}">
+    </div>
+</div>
+
+<!-- OPEN POSITIONS -->
+<div class="card p-4 mb-4 shadow bg-white">
+    <h4 class="fw-bold text-dark">Open Positions</h4>
+    <table class="table table-hover mt-3">
+        <thead class="table-primary">
+        <tr>
+            <th>Symbol</th>
+            <th>Qty</th>
+            <th>Avg Cost</th>
+            <th>Realized</th>
+            <th>Unrealized</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="p : ${positions}">
+            <td th:text="${p.symbol}"></td>
+            <td th:text="${p.quantity}"></td>
+            <td th:text="${p.avgCost}"></td>
+            <td th:text="${p.realizedProfit}"></td>
+            <td th:with="u=${service.getUnrealizedProfit(p)}"
+                th:text="${u}"
+                th:classappend="${u >= 0} ? 'profit' : 'loss'">
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- TRADE HISTORY -->
+<div class="card p-4 mb-4 shadow bg-white">
+    <h4 class="fw-bold text-secondary">Trade History</h4>
+    <table class="table table-hover mt-3">
+        <thead class="table-info">
+        <tr>
+            <th>Symbol</th>
+            <th>Type</th>
+            <th>Qty</th>
+            <th>Price</th>
+            <th>Time</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="o : ${orders}">
+            <td th:text="${o.symbol}"></td>
+            <td th:text="${o.type}"></td>
+            <td th:text="${o.quantity}"></td>
+            <td th:text="${o.price}"></td>
+            <td th:text="${o.time}"></td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+
+</div>
+
+<footer>© 2026 Enterprise Trading</footer>
+
+<!-- CHART SCRIPT -->
+<script>
+
+let labels = [];
+let data = [];
+
+document.querySelectorAll("#portfolioData div").forEach(function(el){
+    labels.push(el.getAttribute("data-symbol"));
+    data.push(parseInt(el.getAttribute("data-qty")));
+});
+
+if(labels.length > 0){
+
+    new Chart(document.getElementById("portfolioChart"),{
+        type:'doughnut',
+        data:{
+            labels:labels,
+            datasets:[{
+                data:data,
+                backgroundColor:[
+                    "#007bff",
+                    "#00c6ff",
+                    "#28a745",
+                    "#ffc107",
+                    "#dc3545",
+                    "#6f42c1"
+                ]
+            }]
+        },
+        options:{
+            responsive:true,
+            maintainAspectRatio:false
+        }
+    });
+
+}else{
+
+    document.getElementById("portfolioChart").outerHTML =
+        "<p class='text-muted text-center'>No active positions</p>";
+
+}
+
+</script>
+
+</body>
+</html>
